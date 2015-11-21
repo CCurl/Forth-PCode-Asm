@@ -8,7 +8,7 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Files", "Files", "{6B5CF4DD-ADB1-4D77-A378-D9B60A434FFD}"
 	ProjectSection(SolutionItems) = preProject
 		bs.4th = bs.4th
-		Notes.txt = Notes.txt
+		ReadMe.txt = ReadMe.txt
 	EndProjectSection
 EndProject
 Global

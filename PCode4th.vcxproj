@@ -11,7 +11,6 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <None Include="bs.4th" />
     <None Include="macros.inc" />
     <None Include="variables.inc" />
     <None Include="words.inc">
@@ -37,9 +36,6 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">false</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">false</ExcludedFromBuild>
     </None>
-  </ItemGroup>
-  <ItemGroup>
-    <Text Include="Notes.txt" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{88689C30-72D8-492B-8BEF-BFA513864326}</ProjectGuid>

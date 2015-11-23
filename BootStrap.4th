@@ -1,4 +1,4 @@
-1024 1024 * 32 * mem_size !
+1024 DUP * 32 * MEM_SIZE !
 restart!
 
 LAST 12 - T1 ! LAST T1 @ ! HERE T1 @ 4 + ! 1 T1 @ 9 + C! 58 T1 @ 10 + C! T1 @ (LAST) !

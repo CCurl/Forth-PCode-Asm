@@ -11,31 +11,9 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <None Include="macros.inc" />
-    <None Include="variables.inc" />
-    <None Include="words.inc">
-      <FileType>Document</FileType>
-    </None>
-    <None Include="bootstrap.inc">
-      <FileType>Document</FileType>
-    </None>
     <MASM Include="main.asm" />
     <None Include="C:\Irvine\Irvine32.inc" />
     <None Include="C:\Irvine\SmallWin.inc" />
-    <None Include="constants.inc" />
-    <None Include="primitives.inc">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">false</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">false</ExcludedFromBuild>
-      <FileType>Document</FileType>
-    </None>
-    <None Include="runtime.inc" />
-    <None Include="test.inc" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="helpers.inc">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">false</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">false</ExcludedFromBuild>
-    </None>
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{88689C30-72D8-492B-8BEF-BFA513864326}</ProjectGuid>

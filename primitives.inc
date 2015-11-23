@@ -551,7 +551,7 @@ fI_25 endp
 fDEPTH proc
 
 	mov		edx, dStack_MAX
-	add		edx, 4
+	; add		edx, 4
 	sub		edx, ebp
 	shr		edx, 2
 	m_Push	edx

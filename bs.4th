@@ -67,6 +67,11 @@ LAST 12 - T1 ! LAST T1 @ ! HERE T1 @ 4 + ! 1 T1 @ 9 + C! 58 T1 @ 10 + C! T1 @ (L
 
 : ? @ . ; : C? C@ . ;
 
+: .inc.  DUP @ 1+  SWAP ! ;
+: .inc4. DUP @ 4 + SWAP ! ;
+: .dec.  DUP @ 1-  SWAP ! ;
+: .dec4. DUP @ 4 - SWAP ! ;
+
 variable tStack 256 allot 
 : tStack.Reset tStack dup ! ;
 : T! tStack @ ! ;
@@ -75,7 +80,7 @@ variable tStack 256 allot
 : T> T@ tStack .dec4. ;
 tStack.Reset
 
-\ : TYPE 0 DO DUP C@ EMIT 1+ LOOP DROP ;
+: COUNT DUP 1+ SWAP C@ ;
 : TYPE BEGIN SWAP DUP C@ EMIT 1+ SWAP 1- DUP WHILE DROP DROP ;
 : CTYPE count type ;
 
@@ -179,6 +184,8 @@ tStack.Reset
 			THEN
 		THEN 
 	AGAIN ;
+	
+: SOURCE (source) @ DUP C@ SWAP 1+ SWAP ;
 
 : FL? ForgetLast LAST? ;
 

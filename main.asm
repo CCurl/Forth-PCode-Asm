@@ -103,7 +103,7 @@ ENTRY_OVERHEAD		EQU 10
 	I_LOOKUP		EQU  22		; 16h
 	I_X86			EQU  23
 	I_JMPNZ			EQU  24		; 18h
-	I_UNUSED_25		EQU  25
+	I_SLITERAL		EQU  25
 	I_DEPTH			EQU  26		; 1ah
 	I_ONEMINUS		EQU  27
 	I_AND			EQU  28		; 1ch
@@ -992,6 +992,21 @@ done:	ret
 fJMPNZ endp
 
 ; ---------------------------------------------------------------------------------------------------------
+fSLITERAL proc
+
+	m_Push		esi
+	xor			eax, eax
+	lodsb
+	add			esi, eax
+	mov			al, [esi]			; the string may be NULL terminated
+	.IF	(al == 0)
+		inc		esi
+	.ENDIF
+	ret
+
+fSLITERAL endp
+
+; ---------------------------------------------------------------------------------------------------------
 ; Dictionary entries look like this:
 ;
 ; Offset
@@ -1684,6 +1699,7 @@ L1:
 	PutVector I_LOOKUP, fLOOKUP
 	PutVector I_X86, fX86
 	PutVector I_JMPNZ, fJMPNZ
+	PutVector I_SLITERAL, fSLITERAL
 	PutVector I_DEPTH, fDEPTH
 	PutVector I_ONEMINUS, fONEMINUS
 	PutVector I_AND, fAND

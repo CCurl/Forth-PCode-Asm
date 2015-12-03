@@ -25,7 +25,7 @@ LAST 12 - T1 ! LAST T1 @ ! HERE T1 @ 4 + ! 1 T1 @ 9 + C! 58 T1 @ 10 + C! T1 @ (L
 : I_DROP 6 ; : I_PICK 7 ; : I_ROT 8 ; : I_ONEPLUS 9 ; : I_PLUS 10 ;
 : I_MINUS 11 ; : I_MULT 12 ; : I_DIV 13 ; : I_EQ 14 ; : I_CALL 15 ;
 : I_LT 16 ; : I_GT 17 ; : I_TO_R 18 ; : I_R_FROM 19 ; : I_R_AT 20 ;
-: I_JMPZ 21 ; : I_LOOKUP 22 ; : I_X86 23 ; : I_JMPNZ 24 ; : I_25 25 ;
+: I_JMPZ 21 ; : I_LOOKUP 22 ; : I_X86 23 ; : I_JMPNZ 24 ; : I_SLITERAL 25 ;
 : I_DEPTH 26 ; : I_ONEMINUS 27 ; : I_AND 28 ; : I_OR 29 ; : I_XOR 30 ;
 : I_DIVMOD 31 ; : I_EMIT 32 ; : I_DICTP 33 ; : I_TWOTIMES 34 ; : I_TWODIV 35 ;
 : I_FOPEN 36 ; : I_FCLOSE 37 ; : I_FREAD 38 ; : I_FWRITE 39 ; : I_FGETC 40 ;

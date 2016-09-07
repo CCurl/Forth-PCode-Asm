@@ -67,7 +67,7 @@
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>C:\Irvine;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>Irvine32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>LIBCMT.lib;Irvine32.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <StackReserveSize>8912896</StackReserveSize>
       <StackCommitSize>8912896</StackCommitSize>
       <ImageHasSafeExceptionHandlers>false</ImageHasSafeExceptionHandlers>

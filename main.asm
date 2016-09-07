@@ -44,23 +44,26 @@ include irvine32.inc
 ; ---------------------------------------------------------------------------------------------------------
 ; ---------------------------------------------------------------------------------------------------------
 
-oneKilo			EQU 400h
+bytes256		EQU 100h
+oneKilo			EQU bytes256 * 4
 oneMB			EQU oneKilo * oneKilo
+
 
 SIZE_DWORD		EQU 4
 SIZE_WORD		EQU 2
 SIZE_CHAR		EQU 1
+CELL_SIZE		EQU SIZE_DWORD
 
 memorySize		EQU oneKilo*8		; The default memory size
-dStackSize		EQU oneKilo*4		; The size of the data stack
-rStack_SZ		EQU oneKilo*2		; The size of the return stack
+dStackSize		EQU bytes256		; The size of the data stack
+rStack_SZ		EQU bytes256		; The size of the return stack
 
 ; NB: the memory size can be changed as follows:
 ; This is done in the beginning of BootStrap.4th
 ; 1024 DUP * 32 * MEM_SIZE !
 ; restart!
 
-inpBuf_SZ		EQU	 0100h			; the size of the input buffer
+inpBuf_SZ		EQU	 bytes256*2		; the size of the input and temp buffers
 
 ; For Dictionary entries
 IMM_BIT				EQU 01h
@@ -104,11 +107,11 @@ ENTRY_OVERHEAD		EQU 10
 	I_X86			EQU  23
 	I_JMPNZ			EQU  24		; 18h
 	I_SLITERAL		EQU  25
-	I_DEPTH			EQU  26		; 1ah
+	I_DEPTH			EQU  26		; 1Ah
 	I_ONEMINUS		EQU  27
-	I_AND			EQU  28		; 1ch
+	I_AND			EQU  28		; 1Ch
 	I_OR			EQU  29
-	I_XOR			EQU  30		; 1eh
+	I_XOR			EQU  30		; 1Eh
 	I_DIVMOD		EQU  31
 	I_EMIT			EQU  32		; 20h
 	I_DICTP			EQU  33
@@ -120,20 +123,28 @@ ENTRY_OVERHEAD		EQU 10
 	I_FWRITE		EQU  39
 	I_FGETC			EQU  40		; 28h
 	I_FETCH_8		EQU  41
-	I_STORE_8		EQU  42		; 2ah
+	I_STORE_8		EQU  42		; 2Ah
 	I_LITERAL_8		EQU  43
-	I_COMMA			EQU  44		; 2ch
+	I_COMMA			EQU  44		; 2Ch
 	I_COMMA_8		EQU  45
-	I_OVER			EQU  46		; 2eh
+	I_OVER			EQU  46		; 2Eh
 	I_STRCMP		EQU  47
 	I_STRCMPI		EQU  48		; 30h
 	I_CREATE		EQU  49
 	I_WORD			EQU  50		; 32h
-	I_BRANCHF		EQU  51
+	I_INC			EQU  51
 	I_GOTO			EQU  52		; 34h
 	I_EXECUTE		EQU  53
 	I_DOT			EQU  54		; 36h
-	; opcodes 55 -> 97 are unused
+	I_ABORT			EQU  55
+	I_TYPE			EQU  56		; 38h
+	I_COLON			EQU  57
+	I_SEMICOLON		EQU  58		; 3Ah
+	I_PLUSSTORE		EQU  59
+	I_MINUSSTORE	EQU  60		; 3Ch
+	I_COLLECT		EQU  61
+	I_CMOVE			EQU  62		; 3Eh
+	; these are unused
 	I_BREAK			EQU  98		; 62h
 	I_RETURN		EQU  99		; 63h
 	; opcodes 100 -> 255 are unused
@@ -273,6 +284,7 @@ msgBadOP	BYTE	"Invalid opcode encountered.", 0
 msgNoMem	BYTE	"Fatal error - memory allocation failed!", 0
 msgBadMem	BYTE	"Fatal error - memory addresses out of expected range!", 0
 char2Num	BYTE	"0123456789ABCDEF", 0
+bsFile		BYTE	"PC4th.fs",0
 
 theMemory	DWORD ?
 bytesRead	DWORD ?
@@ -293,6 +305,8 @@ initialESPVal	DWORD ?
 ; ---------------------------------------------------------------------------------------------------------
 var_HERE		DWORD 	0
 var_LAST		DWORD 	0
+var_oldLAST		DWORD 	0
+var_newLAST		DWORD 	0
 var_STATE		DWORD 	0
 var_toIN		DWORD 	0
 var_SOURCE		DWORD 	0
@@ -303,9 +317,10 @@ var_T2			DWORD 	0
 var_T3			DWORD 	0
 var_T4			DWORD 	0
 
-var_InpBuf		BYTE 	256 DUP (0)
-var_PAD			BYTE 	256 DUP (0)
-var_PAD2		BYTE 	256 DUP (0)
+var_GetCBuf		BYTE 	4 DUP (0)
+var_InpBuf		BYTE 	inpBuf_SZ DUP (0)
+var_PAD			BYTE 	inpBuf_SZ DUP (0)
+var_PAD2		BYTE 	inpBuf_SZ DUP (0)
 
 dStack_MIN		DWORD 	0
 dStack_MAX		DWORD 	0
@@ -314,30 +329,20 @@ var_rStack		DWORD 	rStack_SZ DUP (0)
 ; For the code that generates the constants
 code_GenVar		BYTE	6, I_LITERAL, 0, 0, 0, 0, I_RETURN
 
-; Needed by addWords
-code_HERE_Addr	BYTE	6, I_LITERAL
-				DWORD	var_HERE
-				BYTE	I_RETURN
-code_LAST_Addr	BYTE	6, I_LITERAL
-				DWORD	var_LAST
-				BYTE	I_RETURN
-
 ; General words
 code_HERE		BYTE	7, I_LITERAL
 				DWORD	var_HERE
 				BYTE	I_FETCH, I_RETURN
+
 code_LAST		BYTE	7, I_LITERAL
 				DWORD	var_LAST
 				BYTE	I_FETCH, I_RETURN
 
-code_NoName		BYTE	15, I_LITERAL
-				DWORD	var_HERE
-				BYTE	I_FETCH, I_LITERAL_8, 1, I_LITERAL
-				DWORD	var_STATE
-				BYTE	I_STORE, I_RETURN
-code_SemiColon	BYTE	12, I_LITERAL_8, I_RETURN, I_COMMA_8,  I_LITERAL_8, 0, I_LITERAL
-				DWORD	var_STATE
-				BYTE	I_STORE, I_RETURN
+code_COLON		BYTE	2, I_COLON, I_RETURN
+
+code_SEMICOLON	BYTE	2, I_SEMICOLON, I_RETURN
+
+code_CELLPLUS	BYTE	4, I_LITERAL_8, CELL_SIZE, I_PLUS, I_RETURN
 
 ; ---------------------------------------------------------------------------------------------------------
 name_HERE_Addr	BYTE	6, "(HERE)", 0
@@ -360,12 +365,12 @@ name_PrimVs		BYTE	8, "pVectors", 0
 name_StdOut		BYTE	6, "StdOut", 0
 name_StdIn		BYTE	5, "StdIn", 0
 
-name_NoName		BYTE	7, ":NONAME", 0
-name_SemiColon	BYTE	1, ";", 0
+name_COLON		BYTE	1, ":", 0
+name_SEMICOLON	BYTE	1, ";", 0
 
 name_HERE		BYTE	4, "HERE", 0
 name_LAST		BYTE	4, "LAST", 0
-
+name_CELLPLUS	BYTE	5, "CELL+", 0
 
 ; IMMEDIATE "macro-assembler" type words for primitives
 
@@ -398,14 +403,21 @@ prim_XOR		BYTE	I_XOR,			03, "XOR", 0
 prim_DEPTH		BYTE	I_DEPTH,		05, "DEPTH", 0
 prim_TWOTIMES	BYTE	I_TWOTIMES,		02, "2*", 0
 prim_TWODIV		BYTE	I_TWODIV,		02, "2/", 0
+prim_INC		BYTE	I_INC,			05, ".inc.", 0
+prim_PLUSSTORE	BYTE	I_PLUSSTORE,	02, "+!", 0
+prim_MINUSSTORE	BYTE	I_MINUSSTORE,	02, "-!", 0
+
+prim_COLLECT	BYTE	I_COLLECT,		09, "(collect)", 0
+prim_CMOVE		BYTE	I_CMOVE,		05, "CMOVE", 0
 
 prim_DIVMOD		BYTE	I_DIVMOD,		04, "/MOD", 0
 prim_EMIT		BYTE	I_EMIT,			04, "EMIT", 0
+prim_TYPE		BYTE	I_TYPE,			04, "TYPE", 0
 prim_FOPEN		BYTE	I_FOPEN,		05, "FOPEN", 0
 prim_FCLOSE		BYTE	I_FCLOSE,		06, "FCLOSE", 0
 prim_FREAD		BYTE	I_FREAD,		05, "FREAD", 0
 prim_FWRITE		BYTE	I_FWRITE,		06, "FWRITE", 0
-prim_FGETC		BYTE	I_FGETC,		04, "FGETC", 0
+prim_FGETC		BYTE	I_FGETC,		05, "FGETC", 0
 
 prim_FETCH_8	BYTE	I_FETCH_8,		02, "C@", 0
 prim_STORE_8	BYTE	I_STORE_8,		02, "C!", 0
@@ -423,6 +435,7 @@ prim_BREAK		BYTE	I_BREAK,		03, "BRK", 0
 prim_RETURN		BYTE	I_RETURN,		04, "EXIT", 0
 prim_LOOKUP		BYTE	I_LOOKUP,		06, "LOOKUP", 0
 prim_X86		BYTE	I_X86,			03, "x86", 0
+prim_ABORT		BYTE	I_ABORT,		05, "ABORT", 0
 
 ; ---------------------------------------------------------------------------------------------------------
 array_Vars_1	DWORD	name_HERE_Addr,		var_HERE,
@@ -446,10 +459,11 @@ array_Vars_3	DWORD	name_StdOut,		hStdOut,
 						name_StdIn,			hStdIn,
 						0, 0
 
-array_Words		DWORD	offset code_NoName, offset name_NoName, 0,
-						offset code_SemiColon, offset name_SemiColon, 1,
-						offset code_HERE, offset name_HERE, 0,
+array_Words		DWORD	offset code_HERE, offset name_HERE, 0,
 						offset code_LAST, offset name_LAST, 0,
+						offset code_COLON, offset name_COLON, 0,
+						offset code_SEMICOLON, offset name_SEMICOLON, 1,
+						offset code_CELLPLUS, offset name_CELLPLUS, 0,
 						0, 0, 0 
 
 a_prim_0	DWORD	offset prim_FETCH,
@@ -479,10 +493,14 @@ a_prim_2	DWORD	offset prim_AND,
 					offset prim_XOR,
 					offset prim_DEPTH,
 					offset prim_TWOTIMES,
-					offset prim_TWODIV
+					offset prim_TWODIV,
+					offset prim_DIVMOD,
+					offset prim_INC,
+					offset prim_PLUSSTORE
 			
-a_prim_3	DWORD	offset prim_DIVMOD,
+a_prim_3	DWORD	offset prim_MINUSSTORE,
 					offset prim_EMIT,
+					offset prim_TYPE,
 					offset prim_FOPEN,
 					offset prim_FCLOSE,
 					offset prim_FREAD,
@@ -500,11 +518,13 @@ a_prim_4	DWORD	offset prim_FETCH_8,
 					offset prim_WORD
 			
 a_prim_5	DWORD	offset prim_EXECUTE,
-					offset prim_DOT,
 					offset prim_BREAK,
 					offset prim_RETURN,
 					offset prim_LOOKUP,
 					offset prim_X86,
+					offset prim_ABORT,
+					offset prim_COLLECT,
+					offset prim_CMOVE,
 					0
 		
 
@@ -576,10 +596,9 @@ rPush proc					; pushes EDX onto the return stack
 
 		push		ecx
 
+		add DWORD PTR var_rStack, 4
 		mov			ecx, var_rStack
-		inc			ecx
-		mov			var_rStack, ecx
-		mov			var_rStack[ecx*4], edx
+		mov			[ecx], edx
 
 		pop			ecx
 		ret
@@ -592,11 +611,18 @@ rPop proc					; pops the return stack into EDX
 
 		push		ecx
 
+;		mov			ecx, var_rStack
+;		test		ecx, ecx
+;		jz			isEmpty
+;		mov			edx, var_rStack[ecx*4]
+;		dec			ecx
+;		mov			var_rStack, ecx
+
 		mov			ecx, var_rStack
-		test		ecx, ecx
-		jz			isEmpty
-		mov			edx, var_rStack[ecx*4]
-		dec			ecx
+		cmp			ecx, offset var_rStack
+		jng			isEmpty
+		mov			edx, [ecx]
+		sub			ecx, 4
 		mov			var_rStack, ecx
 
 		pop			ecx
@@ -787,9 +813,10 @@ fROT endp
 ; ** TESTED **
 fONEPLUS proc
 
-		m_getTOS eax
-		inc  eax
-		m_setTOS eax
+;		m_getTOS eax
+;		inc  eax
+;		m_setTOS eax
+		inc DWORD PTR [ebp]
 		ret
 
 fONEPLUS endp
@@ -798,9 +825,10 @@ fONEPLUS endp
 ; ** TESTED **
 fONEMINUS proc
 
-		m_getTOS eax
-		dec  eax
-		m_setTOS eax
+;		m_getTOS eax
+;		dec  eax
+;		m_setTOS eax
+		dec DWORD PTR [ebp]
 		ret
 
 fONEMINUS endp
@@ -810,9 +838,10 @@ fONEMINUS endp
 fPLUS proc
 
 		m_Pop		ebx
-		m_getTOS	eax
-		add			eax, ebx
-		m_setTOS	eax
+;		m_getTOS	eax
+;		add			eax, ebx
+;		m_setTOS	eax
+		add			[ebp], ebx
 		ret
 
 fPLUS endp
@@ -822,9 +851,10 @@ fPLUS endp
 fMINUS proc
 
 		m_Pop		ebx
-		m_getTOS	eax
-		sub			eax, ebx
-		m_setTOS	eax
+;		m_getTOS	eax
+;		sub			eax, ebx
+;		m_setTOS	eax
+		sub			[ebp], ebx
 		ret
 
 fMINUS endp
@@ -870,14 +900,13 @@ f_DIV endp
 ; ** TESTED **
 fEQ proc
 
-		m_Pop		ebx		; Divisor
-		m_getTOS	eax		; Dividend
-		.IF eax == ebx
-			mov		eax, -1
-		.ELSE
-			mov		eax, 0
-		.ENDIF
-		m_setTOS	eax
+		m_Pop		ebx
+		cmp			[ebp], ebx
+		je			isTrue
+		mov DWORD PTR [ebp], 0
+		ret
+
+isTrue: mov DWORD PTR [ebp], -1
 		ret
 
 fEQ endp
@@ -901,12 +930,10 @@ fCALL endp
 fLT proc
 
 		xor			edx, edx
-		dec			edx
 		m_Pop		ebx
-		m_getTOS	eax
-		cmp			eax, ebx
-		jl			allDone
-		inc			edx
+		cmp			[ebp], ebx
+		jge			allDone
+		dec			edx
 allDone:
 		m_setTOS	edx
 		ret
@@ -918,12 +945,10 @@ fLT endp
 fGT proc
 
 		xor			edx, edx
-		dec			edx
 		m_Pop		ebx
-		m_getTOS	eax
-		cmp			eax, ebx
-		jg			allDone
-		inc			edx
+		cmp			[ebp], ebx
+		jle			allDone
+		dec			edx
 allDone:
 		m_setTOS	edx
 		ret
@@ -1081,44 +1106,12 @@ fDEPTH endp
 
 ; ---------------------------------------------------------------------------------------------------------
 ; ** NOT TESTED **
-f22 proc
-
-	ret
-
-f22 endp
-
-; ---------------------------------------------------------------------------------------------------------
-; ** NOT TESTED **
-f23 proc
-
-	ret
-
-f23 endp
-
-; ---------------------------------------------------------------------------------------------------------
-; ** NOT TESTED **
-f24 proc
-
-	ret
-
-f24 endp
-
-; ---------------------------------------------------------------------------------------------------------
-; ** NOT TESTED **
-f25 proc
-
-	ret
-
-f25 endp
-
-; ---------------------------------------------------------------------------------------------------------
-; ** NOT TESTED **
 fAND proc
 
 		m_Pop		ebx
-		m_getTOS	eax
-		and			eax, ebx
-		m_setTOS	eax
+;		m_getTOS	eax
+		and			[ebp], ebx
+;		m_setTOS	eax
 		ret
 
 fAND endp
@@ -1128,9 +1121,9 @@ fAND endp
 f_OR proc
 
 		m_Pop		ebx
-		m_getTOS	eax
-		or			eax, ebx
-		m_setTOS	eax
+;		m_getTOS	eax
+		or			[ebp], ebx
+;		m_setTOS	eax
 		ret
 
 f_OR endp
@@ -1140,9 +1133,9 @@ f_OR endp
 fXOR proc
 
 		m_Pop		ebx
-		m_getTOS	eax
-		xor			eax, ebx
-		m_setTOS	eax
+;		m_getTOS	eax
+		xor			[ebp], ebx
+;		m_setTOS	eax
 		ret
 
 fXOR endp
@@ -1195,9 +1188,10 @@ fDICTP endp
 ; ---------------------------------------------------------------------------------------------------------
 fTwoTimes proc
 
-			m_getTOS	eax
-			shl			eax, 2
-			m_setTOS	eax
+;			m_getTOS	eax
+;			shl			eax, 1
+			shl DWORD PTR [ebp], 1
+;			m_setTOS	eax
 			ret
 
 fTwoTimes endp
@@ -1205,9 +1199,10 @@ fTwoTimes endp
 ; ---------------------------------------------------------------------------------------------------------
 fTwoDiv proc
 
-			m_getTOS	eax
-			shr			eax, 2
-			m_setTOS	eax
+;			m_getTOS	eax
+;			shr			eax, 1
+			shr DWORD PTR [ebp], 1
+;			m_setTOS	eax
 			ret
 
 fTwoDiv endp
@@ -1247,17 +1242,42 @@ fSPOP proc					; string pop (remove last char) ( addr -- c )
 fSPOP endp
 
 ; ---------------------------------------------------------------------------------------------------------
+; HANDLE WINAPI CreateFile(
+;   _In_     LPCTSTR               lpFileName,
+;   _In_     DWORD                 dwDesiredAccess,
+;   _In_     DWORD                 dwShareMode,
+;   _In_opt_ LPSECURITY_ATTRIBUTES lpSecurityAttributes,
+;   _In_     DWORD                 dwCreationDisposition,
+;   _In_     DWORD                 dwFlagsAndAttributes,
+;   _In_opt_ HANDLE                hTemplateFile
+; );
+; DesiredAccess: 
+;   GENERIC_READ    = 0x80000000
+;   GENERIC_WRITE   = 0x40000000
+;   GENERIC_EXECUTE = 0x20000000
+;   GENERIC_ALL     = 0x10000000
+; 
+; fopen ( disposition access filename -- fp err )
 fFOPEN	proc
 
-		m_Pop		eax
-		m_Pop		edx
-		m_Pop		ecx
-		invoke		CreateFile, eax, GENERIC_READ or GENERIC_WRITE, \
-						FILE_SHARE_READ or FILE_SHARE_WRITE, \
-						NULL, 4, FILE_ATTRIBUTE_NORMAL, \
+		m_Pop		eax			; Filename - counted
+		xor			ecx, ecx
+		mov			cl, [eax]
+		inc			eax
+		mov			[eax+ecx], ch
+
+		m_Pop		edx			; Desired Access
+		m_Pop		ecx			; Disposition
+
+		shl			edx, 24
+
+		invoke		CreateFile, eax, edx, \
+						FILE_SHARE_READ or FILE_SHARE_WRITE or FILE_SHARE_DELETE, \
+						NULL, ecx, FILE_ATTRIBUTE_NORMAL, \
 						NULL
 		m_Push		eax
-		call GetLastError
+		call		GetLastError
+		m_Push		eax
 	ret
 
 fFOPEN endp
@@ -1306,6 +1326,21 @@ fFWRITE endp
 ; ** NOT TESTED **
 fFGETC proc
 
+	; ( addr count hFile -- numRead )
+	; invoke ReadFile,hFile,pMemory,MEMSIZE-1,ADDR SizeReadWrite,NULL 
+	push		ecx
+
+	m_Pop		eax		; hFile
+	mov			ecx, 1	; num
+	mov			edx, offset var_GetCBuf
+
+	invoke		ReadFile, eax, edx, ecx, offset SizeReadWrite, NULL 
+	mov			edx, offset var_GetCBuf
+	xor			eax, eax
+	mov			al, [edx]
+	m_Push		eax
+
+	pop			ecx
 	ret
 
 fFGETC endp
@@ -1371,14 +1406,14 @@ fSTRCMPI endp
 ; ** TESTED **
 fBREAK proc
 
-	;mov	edx, offset var_dStack
+	mov	edx, offset dStack_MIN
 	ret
 
 fBREAK endp
 
 ; ---------------------------------------------------------------------------------------------------------
 ; ** NOT TESTED **
-fCreate proc		; (CREATE) ... address of name is on the stack
+fCreate proc		; (CREATE.EMPTY) ... address of name is on the stack
 
 		push			esi
 
@@ -1387,8 +1422,7 @@ fCreate proc		; (CREATE) ... address of name is on the stack
 		test			dl, dl
 		jz				NameNeeded
 
-		call			addWord				; Name in ESI
-		; TODO: if a needed register changed, push and pop it
+		call			addWord				; The name is in ESI
 
 		pop				esi
 		ret
@@ -1400,7 +1434,100 @@ NameNeeded:
 fCreate endp
 
 ; ---------------------------------------------------------------------------------------------------------
-; ** NOT TESTED **
+; al == the char, dl == the delim
+; returns: carry set => match, carry clear => not match
+delimMatches proc
+
+		cmp			al, dl
+		je			isMatch
+		cmp			dl, 20h
+		jne			isNotMatch
+		cmp			al, dl
+		jg			isNotMatch
+
+isMatch:
+		stc
+		ret
+
+isNotMatch:
+		clc
+		ret
+
+delimMatches endp
+
+; ---------------------------------------------------------------------------------------------------------
+; : fCollect ( source destination delimiter -- new-source )
+; NOTE: source must be a NULL-TERMINATED string
+fCollect proc
+
+		push			edi
+		push			esi
+		push			ebx
+
+		m_Pop			edx						; delimiter
+		m_Pop			edi						; dest-addr
+		m_Pop			esi						; src-addr
+
+		mov				ebx, edi
+		inc				edi
+		xor				ecx, ecx				; count
+		cld
+
+
+skipLeading:
+		lodsb			
+		test			al, al					; end of string?
+		jz				allDone
+		call			delimMatches
+		jc				skipLeading
+		jmp				doCollect
+
+theLoop:
+		lodsb
+		test			al, al					; end of string?
+		jz				allDone
+		call			delimMatches
+		jc				allDone
+		
+doCollect:
+		inc				ecx
+		cmp				ecx, 0ffh
+		jg				allDone
+		stosb
+		jmp				theLoop
+		
+allDone:
+		mov				[ebx], cl
+		dec				esi						; return the address of the char that broke the loop
+		m_Push			esi
+		pop				ebx
+		pop				esi
+		pop				edi
+		ret
+
+fCollect endp
+
+; ---------------------------------------------------------------------------------------------------------
+; : CMOVE ( source dest count -- )
+f_CMOVE proc
+
+		push			esi
+		push			edi
+
+		m_Pop			ecx				; count
+		m_Pop			edi				; destination
+		m_Pop			esi				; source
+
+		cld
+		rep movsb
+
+		pop				edi
+		pop				esi
+		ret
+
+f_CMOVE endp
+
+; ---------------------------------------------------------------------------------------------------------
 fWord2 proc		; Puts the next word from the input stream into PAD
 
 		push			eax
@@ -1449,13 +1576,13 @@ allDone:
 fWord2 endp
 
 ; ---------------------------------------------------------------------------------------------------------
-; ** NOT TESTED **
-fBRANCHF proc		; Branch forward relative
+fINC proc		; Increment value at address ... equivalent to DUP @ 1+ SWAP !
 
-	mov		esi, [esi]
+	m_Pop	eax
+	inc DWORD PTR [eax]
 	ret
 
-fBRANCHF endp
+fINC endp
 
 ; ---------------------------------------------------------------------------------------------------------
 ; ** NOT TESTED **
@@ -1473,7 +1600,9 @@ fEXECUTE proc		; Execute XT
 	m_Pop		eax
 	test		eax, eax		; Make sure it is not ZERO
 	jz			allDone
-	mov			esi, eax		; Put the current IP (ESI) on the return stack
+	mov			edx, esi		; Put the current IP (ESI) on the return stack
+	call		rPush
+	mov			esi, eax
 
 allDone:
 	ret
@@ -1481,48 +1610,136 @@ allDone:
 fEXECUTE endp
 
 ; ---------------------------------------------------------------------------------------------------------
-; ** TESTED **
-fDOT proc
+fABORT proc
 
-			m_Pop		eax
-			mov			ebx, var_BASE
-			m_Push		20h
-			xor			edx, edx
-			mov			ecx, 1
+			jmp			mainloop
 
-			; is this a negative number?
-			push		edx
-			test		eax, eax
-			jns			doDiv
-			pop			edx					; yes, it is negative
-			inc			edx
-			push		edx
-			xor			eax, 0ffffffffh
-			inc			eax
+fABORT endp
 
-doDiv:		xor			edx, edx			; DIV uses EDX:EAX
-			div			ebx					; EAX gets quotient, EDX gets remainder
-			.IF edx < 10
-				add edx, 48
-			.ELSE
-				add	edx, 55
-			.ENDIF
-			m_Push		edx					; Push the digit
-			inc			ecx					; Number of digits
-			test		eax, eax
-			jnz			doDiv
+; ---------------------------------------------------------------------------------------------------------
+fTYPE proc
 
-			pop			edx					; Start negative number with a '-'
-			test		edx, edx
-			jz			doOut
-			m_push		'-'
-			inc			ecx
+			push		esi
+			m_Pop		ecx
+			m_Pop		esi
 
-doOut:		call		fEMIT
-			loop		doOut
+			test		ecx, ecx
+			jz allDone
+
+L1:			cld
+			lodsb
+			call		WriteChar
+			loop		L1
+
+allDone:	pop			esi
 			ret
 
-fDOT endp
+fTYPE endp
+
+; ---------------------------------------------------------------------------------------------------------
+fCOLON proc
+
+			call		fWord2
+			call		fCREATE
+
+			; fCREATE (addWord) updates LAST. While this is fine for built in words, it is
+			; wrong for user-defined words. LAST needs to be set when ';' is executed.
+			; NB: addWord also sets ver_oldLAST and var_newLAST.
+
+			mov			eax, var_oldLAST
+			mov			var_LAST, eax
+
+			; addWord also sets the READY bit on. That should also be done on ';'.
+			mov			eax, var_newLAST
+			add			eax, FLAGS_OFFSET
+			mov BYTE PTR [eax], 0
+
+			mov DWORD PTR var_STATE, 1
+			ret
+
+fCOLON endp
+
+; ---------------------------------------------------------------------------------------------------------
+fSEMICOLON proc
+
+			m_Push		I_RETURN
+			call		fCOMMA_8
+			mov			eax, var_newLAST
+			mov			var_LAST, eax
+			mov			var_oldLAST, eax
+			add			eax, FLAGS_OFFSET
+			mov			dl, [eax]
+			or			dl, READY_BIT
+			mov			[eax], dl
+			mov DWORD PTR var_STATE, 0
+			ret
+
+fSEMICOLON endp
+
+; ---------------------------------------------------------------------------------------------------------
+fPLUSSTORE proc
+
+			; : +! ( num addr -- ) TUCK @ + SWAP ! ;
+			m_Pop	eax			; addr
+			m_Pop	edx			; num
+			add		[eax], edx
+			ret
+
+fPLUSSTORE endp
+
+; ---------------------------------------------------------------------------------------------------------
+fMINUSSTORE proc
+
+			; : -! ( num addr -- ) TUCK @ ROT - SWAP ! ;
+			m_Pop	eax			; addr
+			m_Pop	edx			; num
+			sub		[eax], edx
+			ret
+
+fMINUSSTORE endp
+
+; ---------------------------------------------------------------------------------------------------------
+fEXPECT proc
+
+			m_Pop	ecx			; Count
+			m_Pop	edx			; ToAddr
+			push	ebx
+			mov		ebx, edx
+			mov	BYTE PTR [edx], 0
+theLoop:
+			mov		[edx], al
+			inc BYTE PTR [ebx]
+			inc		edx
+			dec		ecx
+			test	ecx, ecx
+			jnz		theLoop
+
+allDone:
+			pop		ebx
+			ret
+
+fEXPECT endp
+
+; ---------------------------------------------------------------------------------------------------------
+; : fopen ( disposition access counted-filename -- fp err ) ;
+; : LOADFROM ( counted-filename -- err ) ;
+fFGETCH proc
+
+			call	fFOPEN
+			m_Pop	eax		; FileHandle
+			m_Pop	edx		; handle
+
+			test	eax, eax
+			jz		opened
+			m_Push	eax
+			ret
+
+opened:
+			xor		eax, eax
+			m_Push	eax
+			ret
+
+fFGETCH endp
 
 ; ---------------------------------------------------------------------------------------------------------
 ; ---------------------------------------------------------------------------------------------------------
@@ -1541,9 +1758,9 @@ isWS proc				; Sets the Z/Equals flag if the char in DL is whitespace
 			je			allDone
 			cmp			dl, 32
 			je			allDone
-			; TODO: decide what to do about other chars that are not printable
+			; Section 3.4.1.1 says non-printable chars can be considered whitespace
 			jg			notWS
-			cmp			dl, dl		; just set the Z flag for now
+			cmp			dl, dl		
 
 allDone:	ret
 
@@ -1725,10 +1942,17 @@ L1:
 	PutVector I_STRCMPI, fSTRCMPI
 	PutVector I_CREATE, fCreate
 	PutVector I_WORD, fWord2
-	PutVector I_BRANCHF, fBRANCHF
+	PutVector I_INC, fINC
 	PutVector I_GOTO, fGOTO
 	PutVector I_EXECUTE, fEXECUTE
-	PutVector I_DOT, fDOT
+	PutVector I_ABORT, fABORT
+	PutVector I_TYPE, fTYPE
+	PutVector I_COLON, fCOLON
+	PutVector I_SEMICOLON, fSEMICOLON
+	PutVector I_PLUSSTORE, fPLUSSTORE
+	PutVector I_MINUSSTORE, fMINUSSTORE
+	PutVector I_COLLECT, fCOLLECT
+	PutVector I_CMOVE, f_CMOVE
 
 	; Opcodes 51 -> 97 are not used ... yet
 
@@ -1806,8 +2030,8 @@ bootStrap proc
 	mov				dStack_MAX, eax
 
 	; Initialize the stacks
-	xor				edi, edi
-	mov				var_rStack, edi
+;	mov DWORD PTR var_rStack, 0
+	mov				var_rStack, offset var_rStack
 
 	; Built in words ...
 	call initializeWords
@@ -1852,6 +2076,7 @@ addWord	proc	; Name in ESI
 
 			; Calculate the new starting address
 addIt:		mov				eax, var_LAST		; EAX (LAST) is used later as well
+			mov				var_oldLAST, eax
 			xor				ecx, ecx
 			mov				cl, [esi]
 			inc				cl
@@ -1859,6 +2084,7 @@ addIt:		mov				eax, var_LAST		; EAX (LAST) is used later as well
 			mov				edi, eax
 			sub				edi, ecx
 			mov				var_LAST, edi
+			mov				var_newLAST, edi
 
 			STOSD								; EAX has the old LAST
 			mov				eax, var_HERE		; Initial XT is HERE
@@ -1875,7 +2101,11 @@ addIt:		mov				eax, var_LAST		; EAX (LAST) is used later as well
 			xor				al, al				; NULL terminator
 			STOSB
 
-allDone:	pop				ecx
+allDone:	m_Push			I_DICTP
+			call			fCOMMA_8
+			m_PushVal		var_LAST
+			call			fCOMMA
+			pop				ecx
 			pop				esi
 			pop				edi
 			ret
@@ -2037,9 +2267,12 @@ L1:
 	jmp				L1
 
 doRet:
-	mov		edx, var_rStack		; If the return stack is empty, then we are done
-	test	edx, edx
-	jz		allDone
+;	mov		edx, var_rStack		; If the return stack is empty, then we are done
+;	test	edx, edx
+;	jz		allDone
+	mov		edx, var_rStack
+	cmp		edx, offset var_rStack
+	jle		allDone
 
 	call rPop
 	mov  esi, edx
@@ -2207,13 +2440,14 @@ tryNum:
 			je				allDone					; No, all done.
 
 			; Compile it into the definition. Numbers < 256 can use I_LITERAL_8
-			.IF			ax < 100h
-				m_pushExecO		I_LITERAL_8, I_COMMA_8	
-				m_execO			I_COMMA_8
-			.ELSE
-				m_pushExecO		I_LITERAL, I_COMMA_8
-				m_execO			I_COMMA
-			.ENDIF
+			cmp DWORD PTR [ebp], 00ffh
+			jg					tooBig
+			m_pushExecO			I_LITERAL_8, I_COMMA_8	
+			m_execO				I_COMMA_8
+			ret
+			
+tooBig:		m_pushExecO			I_LITERAL, I_COMMA_8
+			m_execO				I_COMMA
 allDone:	ret
 
 soSorry:	mov				edx, offset msgBad_PRE		; not a number either ... 
@@ -2283,10 +2517,12 @@ mainLoop	proc
 
 	; Initialize the stacks
 	mov				ebp, dStack_MAX
-	; add				ebp, SIZE_DWORD
+;	add				ebp, SIZE_DWORD
 	xor				edi, edi
-	mov				var_rStack, 0
-	; mov				var_cStack, 0
+;	mov				var_rStack, 0
+	mov				var_rStack, offset var_rStack
+
+;	mov				var_cStack, 0
 
 	mov				var_STATE, 0
 	mov				var_BASE, 10

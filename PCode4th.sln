@@ -7,8 +7,10 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "PCode4th", "PCode4th.vcxpro
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Files", "Files", "{6B5CF4DD-ADB1-4D77-A378-D9B60A434FFD}"
 	ProjectSection(SolutionItems) = preProject
+		Array.4th = Array.4th
 		BootStrap.4th = BootStrap.4th
 		ReadMe.txt = ReadMe.txt
+		See.4th = See.4th
 	EndProjectSection
 EndProject
 Global

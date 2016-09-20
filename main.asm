@@ -224,15 +224,7 @@ var_rStack		DWORD 	rStack_SZ DUP (0)
 ;		count.
 ; 
 ; ---------------------------------------------------------------------------------------------------------
-fDrop proc			
-
-		; cmp			ebp, dStack_MAX
-		; jg			stackEmpty
-		m_Drop
-		ret
-
-fDrop endp
-
+; ---------------------------------------------------------------------------------------------------------
 ; ---------------------------------------------------------------------------------------------------------
 stackEmpty proc
 
@@ -331,9 +323,9 @@ f_LITERAL endp
 ; ------------------------------------------------------------------------
 f_FETCH proc
 
-	m_pop	eax
-	mov		edx, theMemory[eax]
-	m_push	edx
+	m_getTOS	eax
+	mov			edx, theMemory[eax]
+	m_setTOS	edx
 	ret
 
 f_FETCH endp
@@ -362,7 +354,7 @@ f_SWAP endp
 ; ------------------------------------------------------------------------
 f_DROP proc
 
-	m_pop	eax
+	m_drop
 	ret
 
 f_DROP endp
@@ -370,7 +362,8 @@ f_DROP endp
 ; ------------------------------------------------------------------------
 f_DUP proc
 
-	m_pop	eax
+	m_getTOS	eax
+	m_push		eax
 	ret
 
 f_DUP endp
@@ -442,7 +435,8 @@ f_CLITERAL endp
 ; ------------------------------------------------------------------------
 f_CFETCH proc
 
-	m_pop	eax
+	lodsb
+	m_cpush		al
 	ret
 
 f_CFETCH endp
@@ -610,7 +604,9 @@ f_RTOD endp
 ; ------------------------------------------------------------------------
 f_ONEPLUS proc
 
-	m_pop	eax
+	m_getTOS	eax
+	inc			eax
+	m_setTOS	eax
 	ret
 
 f_ONEPLUS endp

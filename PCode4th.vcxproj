@@ -16,6 +16,7 @@
   <ItemGroup>
     <None Include="Irvine32.inc" />
     <None Include="SmallWin.inc" />
+    <None Include="VirtualKeys.inc" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{88689C30-72D8-492B-8BEF-BFA513864326}</ProjectGuid>

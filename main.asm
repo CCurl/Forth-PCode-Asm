@@ -321,202 +321,410 @@ doError:
 
 ; ------------------------------------------------------------------------
 f_LITERAL proc
+
+	lodsd
+	m_push	eax	
+	ret
+
 f_LITERAL endp
 
 ; ------------------------------------------------------------------------
 f_FETCH proc
+
+	m_pop	eax
+	mov		edx, theMemory[eax]
+	m_push	edx
+	ret
+
 f_FETCH endp
 
 ; ------------------------------------------------------------------------
 f_STORE proc
+
+	m_pop	eax
+	m_pop	ecx
+	mov		theMemory[eax], ecx
+	ret
+
 f_STORE endp
 
 ; ------------------------------------------------------------------------
 f_SWAP proc
+
+	m_pop	eax
+	m_getTOS	edx
+	m_setTOS	eax
+	m_push		edx
+	ret
+
 f_SWAP endp
 
 ; ------------------------------------------------------------------------
 f_DROP proc
+
+	m_pop	eax
+	ret
+
 f_DROP endp
 
 ; ------------------------------------------------------------------------
 f_DUP proc
+
+	m_pop	eax
+	ret
+
 f_DUP endp
 
 ; ------------------------------------------------------------------------
 f_SLITERAL proc
+
+	m_pop	eax
+	ret
+
 f_SLITERAL endp
 
 ; ------------------------------------------------------------------------
 f_JMP proc
+
+	m_pop	eax
+	ret
+
 f_JMP endp
 
 ; ------------------------------------------------------------------------
 f_JMPZ proc
+
+	m_pop	eax
+	ret
+
 f_JMPZ endp
 
 ; ------------------------------------------------------------------------
 f_JMPNZ proc
+
+	m_pop	eax
+	ret
+
 f_JMPNZ endp
 
 ; ------------------------------------------------------------------------
 f_CALL proc
+
+	m_pop	eax
+	ret
+
 f_CALL endp
 
 ; ------------------------------------------------------------------------
 f_RET proc
+
+	m_pop	eax
+	ret
+
 f_RET endp
 
 ; ------------------------------------------------------------------------
 f_ZTYPE proc
+
+	m_pop	eax
+	ret
+
 f_ZTYPE endp
 
 ; ------------------------------------------------------------------------
 f_CLITERAL proc
+
+	m_pop	eax
+	ret
+
 f_CLITERAL endp
 
 ; ------------------------------------------------------------------------
 f_CFETCH proc
+
+	m_pop	eax
+	ret
+
 f_CFETCH endp
 
 ; ------------------------------------------------------------------------
 f_CSTORE proc
+
+	m_pop	eax
+	ret
+
 f_CSTORE endp
 
 ; ------------------------------------------------------------------------
 f_ADD proc
+
+	m_pop	eax
+	ret
+
 f_ADD endp
 
 ; ------------------------------------------------------------------------
 f_SUB proc
+
+	m_pop	eax
+	ret
+
 f_SUB endp
 
 ; ------------------------------------------------------------------------
 f_MUL proc
+
+	m_pop	eax
+	ret
+
 f_MUL endp
 
 ; ------------------------------------------------------------------------
 f_DIV proc
+
+	m_pop	eax
+	ret
+
 f_DIV endp
 
 ; ------------------------------------------------------------------------
 f_LT proc
+
+	m_pop	eax
+	ret
+
 f_LT endp
 
 ; ------------------------------------------------------------------------
 f_EQ proc
+
+	m_pop	eax
+	ret
+
 f_EQ endp
 
 ; ------------------------------------------------------------------------
 f_GT proc
+
+	m_pop	eax
+	ret
+
 f_GT endp
 
 ; ------------------------------------------------------------------------
 f_DICTP proc
+
+	lodsd
+	ret
+
 f_DICTP endp
 
 ; ------------------------------------------------------------------------
 f_EMIT proc
+
+	m_pop	eax
+	ret
+
 f_EMIT endp
 
 ; ------------------------------------------------------------------------
 f_OVER proc
+
+	m_pop	eax
+	ret
+
 f_OVER endp
 
 ; ------------------------------------------------------------------------
 f_COMPARE proc
+
+	m_pop	eax
+	ret
+
 f_COMPARE endp
 
 ; ------------------------------------------------------------------------
 f_FOPEN proc
+
+	m_pop	eax
+	ret
+
 f_FOPEN endp
 
 ; ------------------------------------------------------------------------
 f_FREAD proc
+
+	m_pop	eax
+	ret
+
 f_FREAD endp
 
 ; ------------------------------------------------------------------------
 f_FREADLINE proc
+
+	m_pop	eax
+	ret
+
 f_FREADLINE endp
 
 ; ------------------------------------------------------------------------
 f_FWRITE proc
+
+	m_pop	eax
+	ret
+
 f_FWRITE endp
 
 ; ------------------------------------------------------------------------
 f_FCLOSE proc
+
+	m_pop	eax
+	ret
+
 f_FCLOSE endp
 
 ; ------------------------------------------------------------------------
 f_DTOR proc
+
+	m_pop	eax
+	ret
+
 f_DTOR endp
 
 ; ------------------------------------------------------------------------
 f_RFETCH proc
+
+	m_pop	eax
+	ret
+
 f_RFETCH endp
 
 ; ------------------------------------------------------------------------
 f_RTOD proc
+
+	m_pop	eax
+	ret
+
 f_RTOD endp
 
 ; ------------------------------------------------------------------------
 f_ONEPLUS proc
+
+	m_pop	eax
+	ret
+
 f_ONEPLUS endp
 
 ; ------------------------------------------------------------------------
 f_PICK proc
+
+	m_pop	eax
+	ret
+
 f_PICK endp
 
 ; ------------------------------------------------------------------------
 f_DEPTH proc
+
+	m_pop	eax
+	ret
+
 f_DEPTH endp
 
 ; ------------------------------------------------------------------------
 f_GETCH proc
+
+	m_pop	eax
+	ret
+
 f_GETCH endp
 
 ; ------------------------------------------------------------------------
 f_LSHIFT proc
+
+	m_pop	eax
+	ret
+
 f_LSHIFT endp
 
 ; ------------------------------------------------------------------------
 f_RSHIFT proc
+
+	m_pop	eax
+	ret
+
 f_RSHIFT endp
 
 ; ------------------------------------------------------------------------
 f_AND proc
+
+	m_pop	eax
+	ret
+
 f_AND endp
 
 ; ------------------------------------------------------------------------
 f_OR proc
+
+	m_pop	eax
+	ret
+
 f_OR endp
 
 ; ------------------------------------------------------------------------
 f_BRANCH proc
+
+	m_pop	eax
+	ret
+
 f_BRANCH endp
 
 ; ------------------------------------------------------------------------
 f_BRANCHZ proc
+
+	m_pop	eax
+	ret
+
 f_BRANCHZ endp
 
 ; ------------------------------------------------------------------------
 f_BRANCHNZ proc
+
+	m_pop	eax
+	ret
+
 f_BRANCHNZ endp
 
 ; ------------------------------------------------------------------------
 f_COMPAREI proc
+
+	m_pop	eax
+	ret
+
 f_COMPAREI endp
 
 ; ------------------------------------------------------------------------
 f_BREAK proc
+
+	m_pop	eax
+	ret
+
 f_BREAK endp
 
 ; ------------------------------------------------------------------------
 f_RESET proc
+
+	m_pop	eax
+	ret
+
 f_RESET endp
 
 ; ------------------------------------------------------------------------
 f_BYE proc
+
+	m_pop	eax
+	ret
+
 f_BYE endp
 
 
@@ -799,8 +1007,9 @@ bootStrap endp
 
 executeOpcode proc						; EDX = opcode, ESI = IP
 
-	and		edx, 00ffh					; ensure range 0-255 ... all 256 entries have handlers.
-	mov		ecx, primVectors[edx*4]		; most cause a jump to the invalid opcode handler.
+	and		eax, 00ffh					; ensure range 0-255 ... all 256 entries have handlers.
+	shl		eax, 2
+	mov		ecx, primVectors[eax]		; most cause a jump to the invalid opcode handler.
 	jmp		ecx							; jump to the handler.
 
 executeOpcode endp
@@ -813,12 +1022,13 @@ executeOpcode endp
 runForthVM proc	
 	
 L1:
-	mov				dl, [esi]
-	inc				esi
-	cmp				dl, I_RET
+	; NOTE: the direction flag is ASSUMED to be clear.
+	; Anything that sets it MUST clear it before exiting.
+	lodsb
+	cmp				al, I_RET
 	je				doRet
 
-	cmp				dl, I_BYE
+	cmp				al, I_BYE
 	je				allDone
 
 	call			executeOpcode

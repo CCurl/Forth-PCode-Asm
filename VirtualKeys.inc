@@ -1,0 +1,1 @@
+; Empty virtual keys file for Irvine32 support

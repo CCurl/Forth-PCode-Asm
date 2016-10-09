@@ -27,15 +27,15 @@ bytes256		EQU 100h
 oneKilo			EQU bytes256 * 4
 oneMB			EQU oneKilo * oneKilo
 
-
 SIZE_DWORD		EQU 4
 SIZE_WORD		EQU 2
 SIZE_CHAR		EQU 1
 CELL_SIZE		EQU SIZE_DWORD
 
-memorySize		EQU oneKilo*8		; The default memory size
-dStackSize		EQU bytes256		; The size of the data stack
-rStack_SZ		EQU bytes256		; The size of the return stack
+memorySize		EQU oneKilo * 16	; The default memory size
+stackSize		EQU oneKilo
+dStackSize		EQU bytes256 * 2	; The size of the data stack
+rStack_SZ		EQU bytes256 * 2	; The size of the return stack
 
 ; NB: the memory size can be changed as follows:
 ; This is done in the beginning of BootStrap.4th
@@ -155,6 +155,84 @@ m_Pop		macro	toReg
 			endm
 
 ; ---------------------------------------------------------------------------------------------------------
+m_TOS		macro
+
+			DWORD PTR [ebp]
+
+			endm
+
+; ---------------------------------------------------------------------------------------------------------
+m_cTOS		macro
+
+			BYTE PTR [ebp]
+
+			endm
+
+; ---------------------------------------------------------------------------------------------------------
+abs2vm		macro	tgt, absolute
+
+			mov tgt, absolute
+			sub tgt, theMemory
+
+			endm
+
+; ---------------------------------------------------------------------------------------------------------
+vm2abs		macro	tgt, offset
+
+			mov tgt, theMemory
+			add tgt, offset
+
+			endm
+
+; ---------------------------------------------------------------------------------------------------------
+m_Store		macro	offset, val
+
+			push edi
+			mov edi, theMemory
+			mov DWORD PTR [edi][offset], val
+			pop edi
+
+			endm
+
+; ---------------------------------------------------------------------------------------------------------
+m_cStore	macro	offset, val
+
+			push edi
+			mov edi, theMemory
+			mov BYTE PTR [edi][offset], val
+			pop edi
+
+			endm
+
+; ---------------------------------------------------------------------------------------------------------
+m_Fetch		macro	tgt, offset
+
+			push edi
+			mov edi, theMemory
+			mov DWORD PTR tgt, DWORD PTR [edi][offset]
+			pop edi
+
+			endm
+
+; ---------------------------------------------------------------------------------------------------------
+m_cFetch	macro	tgt, offset
+
+			push edi
+			mov edi, theMemory
+			mov BYTE PTR tgt, BYTE PTR [edi][offset]
+			pop edi
+
+			endm
+
+; ---------------------------------------------------------------------------------------------------------
+m_instr macro inst
+
+	mov al, inst
+	stosb
+
+endm
+
+; ---------------------------------------------------------------------------------------------------------
 ; ---------------------------------------------------------------------------------------------------------
 ; ---------------------------------------------------------------------------------------------------------
 ; Section 3 - Program data
@@ -175,6 +253,7 @@ msgBadMem	BYTE	"Fatal error - memory addresses out of expected range!", 0
 bsFile		BYTE	"PC4th.fs",0
 
 theMemory	DWORD ?
+theStacks	DWORD ?
 bytesRead	DWORD ?
 
 hStdIn		HANDLE ?
@@ -183,6 +262,9 @@ SizeReadWrite DWORD 0
 
 initialESPVal	DWORD ?
 
+dStack_MIN		DWORD 	0
+dStack_MAX		DWORD 	0
+var_rStack		DWORD 	rStack_SZ DUP (0)
 
 ; ---------------------------------------------------------------------------------------------------------
 ; ---------------------------------------------------------------------------------------------------------
@@ -191,10 +273,6 @@ initialESPVal	DWORD ?
 ; ---------------------------------------------------------------------------------------------------------
 ; ---------------------------------------------------------------------------------------------------------
 ; ---------------------------------------------------------------------------------------------------------
-
-dStack_MIN		DWORD 	0
-dStack_MAX		DWORD 	0
-var_rStack		DWORD 	rStack_SZ DUP (0)
 
 ; ---------------------------------------------------------------------------------------------------------
 ; ---------------------------------------------------------------------------------------------------------
@@ -228,31 +306,31 @@ var_rStack		DWORD 	rStack_SZ DUP (0)
 ; ---------------------------------------------------------------------------------------------------------
 stackEmpty proc
 
-		; mov				edx, offset msgStackE
-		jmp				doError
+		; mov			edx, offset msgStackE
+		; jmp			doError
 
 stackEmpty endp
 
 ; ---------------------------------------------------------------------------------------------------------
 stackUnderFlow proc			; If we get here, the stack could be hosed ...
 
-		; mov				edx, offset msgStackU
-		jmp				doError
+		; mov			edx, offset msgStackU
+		; jmp			doError
 
 stackUnderFlow endp
 
 ; ---------------------------------------------------------------------------------------------------------
 stackOverFlow proc			; If we get here, the stack could be hosed ...
 
-		; mov				edx, offset msgStackO
-		jmp				doError
+		; mov			edx, offset msgStackO
+		; jmp			doError
 
 stackOverFlow endp
 
 ; ---------------------------------------------------------------------------------------------------------
-; ---------------------------------------------------------------------------------------------------------
-; ** NOT TESTED **
-rPush proc					; pushes EDX onto the return stack
+; pushes EDX onto the return stack
+
+rPush:
 
 		push		ecx
 
@@ -263,24 +341,14 @@ rPush proc					; pushes EDX onto the return stack
 		pop			ecx
 		ret
 
-rPush endp
-
 ; ---------------------------------------------------------------------------------------------------------
-; ** NOT TESTED **
-rPop proc					; pops the return stack into EDX
+; pops the return stack into EDX
+
+rPop:
 
 		push		ecx
 
-;		mov			ecx, var_rStack
-;		test		ecx, ecx
-;		jz			isEmpty
-;		mov			edx, var_rStack[ecx*4]
-;		dec			ecx
-;		mov			var_rStack, ecx
-
 		mov			ecx, var_rStack
-		; cmp			ecx, offset var_rStack
-		; jng			isEmpty
 		mov			edx, [ecx]
 		sub			ecx, 4
 		mov			var_rStack, ecx
@@ -289,12 +357,12 @@ rPop proc					; pops the return stack into EDX
 		ret
 
 isEmpty:
-		; mov				edx, offset msgRStackE
-		jmp				doError
-
-rPop endp
+		; mov			edx, offset msgRStackE
+		; jmp			doError
 
 doError:
+		ret
+
 
 ; ---------------------------------------------------------------------------------------------------------
 
@@ -312,417 +380,394 @@ doError:
 
 
 ; ------------------------------------------------------------------------
-f_LITERAL proc
+f_LITERAL:
 
 	lodsd
 	m_push	eax	
 	ret
 
-f_LITERAL endp
-
 ; ------------------------------------------------------------------------
-f_FETCH proc
+f_FETCH:
 
-	m_getTOS	eax
-	mov			edx, theMemory[eax]
-	m_setTOS	edx
+	m_getTOS	edx
+	m_Fetch		eax, edx
+	m_setTOS	eax
 	ret
 
-f_FETCH endp
-
 ; ------------------------------------------------------------------------
-f_STORE proc
+f_STORE:
 
-	m_pop	eax
-	m_pop	ecx
-	mov		theMemory[eax], ecx
+	m_pop		edx
+	m_pop		eax
+	m_Store		edx, eax
 	ret
 
-f_STORE endp
-
 ; ------------------------------------------------------------------------
-f_SWAP proc
+f_SWAP:
 
-	m_pop	eax
+	m_pop		eax
 	m_getTOS	edx
 	m_setTOS	eax
 	m_push		edx
 	ret
 
-f_SWAP endp
-
 ; ------------------------------------------------------------------------
-f_DROP proc
+f_DROP:
 
 	m_drop
 	ret
 
-f_DROP endp
-
 ; ------------------------------------------------------------------------
-f_DUP proc
+f_DUP:
 
 	m_getTOS	eax
 	m_push		eax
 	ret
 
-f_DUP endp
+; ------------------------------------------------------------------------
+f_SLITERAL:
+
+		mov		eax, esi			; push the string start address
+		sub		eax, [theMemory]
+		m_push	eax
+		lodsb						; Count byte
+		xor		ecx, ecx
+		mov		cl, al
+		rep		lodsb				; skip string data
+		mov		al, [esi]
+		cmp		al, 0				; if it ends with NULL, skip that too
+		jne		sl1
+		lodsb
+sl1:	ret
 
 ; ------------------------------------------------------------------------
-f_SLITERAL proc
+f_JMP:
+
+		lodsd
+		vm2abs	esi, eax
+		ret
+
+; ------------------------------------------------------------------------
+f_JMPZ:
 
 	m_pop	eax
-	ret
-
-f_SLITERAL endp
-
-; ------------------------------------------------------------------------
-f_JMP proc
-
-	m_pop	eax
-	ret
-
-f_JMP endp
-
-; ------------------------------------------------------------------------
-f_JMPZ proc
-
-	m_pop	eax
-	ret
-
-f_JMPZ endp
-
-; ------------------------------------------------------------------------
-f_JMPNZ proc
-
-	m_pop	eax
-	ret
-
-f_JMPNZ endp
-
-; ------------------------------------------------------------------------
-f_CALL proc
-
-	m_pop	eax
-	ret
-
-f_CALL endp
-
-; ------------------------------------------------------------------------
-f_RET proc
-
-	m_pop	eax
-	ret
-
-f_RET endp
-
-; ------------------------------------------------------------------------
-f_ZTYPE proc
-
-	m_pop	eax
-	ret
-
-f_ZTYPE endp
-
-; ------------------------------------------------------------------------
-f_CLITERAL proc
-
-	m_pop	eax
-	ret
-
-f_CLITERAL endp
-
-; ------------------------------------------------------------------------
-f_CFETCH proc
-
-	lodsb
-	m_cpush		al
-	ret
-
-f_CFETCH endp
-
-; ------------------------------------------------------------------------
-f_CSTORE proc
-
-	m_pop	eax
-	ret
-
-f_CSTORE endp
-
-; ------------------------------------------------------------------------
-f_ADD proc
-
-	m_pop	eax
-	ret
-
-f_ADD endp
-
-; ------------------------------------------------------------------------
-f_SUB proc
-
-	m_pop	eax
-	ret
-
-f_SUB endp
-
-; ------------------------------------------------------------------------
-f_MUL proc
-
-	m_pop	eax
-	ret
-
-f_MUL endp
-
-; ------------------------------------------------------------------------
-f_DIV proc
-
-	m_pop	eax
-	ret
-
-f_DIV endp
-
-; ------------------------------------------------------------------------
-f_LT proc
-
-	m_pop	eax
-	ret
-
-f_LT endp
-
-; ------------------------------------------------------------------------
-f_EQ proc
-
-	m_pop	eax
-	ret
-
-f_EQ endp
-
-; ------------------------------------------------------------------------
-f_GT proc
-
-	m_pop	eax
-	ret
-
-f_GT endp
-
-; ------------------------------------------------------------------------
-f_DICTP proc
-
+	cmp		eax, 0
+	je		f_JMP
 	lodsd
 	ret
 
-f_DICTP endp
-
 ; ------------------------------------------------------------------------
-f_EMIT proc
+f_JMPNZ:
 
 	m_pop	eax
+	cmp		eax, 0
+	jne		f_JMP
+	lodsd
 	ret
 
-f_EMIT endp
+; ------------------------------------------------------------------------
+f_CALL:
+
+	lodsd
+	abs2vm		edx, esi
+	call		rPush
+	vm2abs		esi, eax
+	ret
 
 ; ------------------------------------------------------------------------
-f_OVER proc
+f_RET:
+
+	call		rPop
+	vm2abs		esi, edx
+	ret
+
+; ------------------------------------------------------------------------
+f_ZTYPE:
 
 	m_pop	eax
+	; TODO
 	ret
 
-f_OVER endp
-
 ; ------------------------------------------------------------------------
-f_COMPARE proc
+f_CLITERAL:
 
-	m_pop	eax
+	lodsb
+	m_cPush	al
 	ret
 
-f_COMPARE endp
-
 ; ------------------------------------------------------------------------
-f_FOPEN proc
+f_CFETCH:
 
-	m_pop	eax
-	ret
-
-f_FOPEN endp
-
-; ------------------------------------------------------------------------
-f_FREAD proc
-
-	m_pop	eax
-	ret
-
-f_FREAD endp
-
-; ------------------------------------------------------------------------
-f_FREADLINE proc
-
-	m_pop	eax
-	ret
-
-f_FREADLINE endp
-
-; ------------------------------------------------------------------------
-f_FWRITE proc
-
-	m_pop	eax
-	ret
-
-f_FWRITE endp
-
-; ------------------------------------------------------------------------
-f_FCLOSE proc
-
-	m_pop	eax
-	ret
-
-f_FCLOSE endp
-
-; ------------------------------------------------------------------------
-f_DTOR proc
-
-	m_pop	eax
-	ret
-
-f_DTOR endp
-
-; ------------------------------------------------------------------------
-f_RFETCH proc
-
-	m_pop	eax
-	ret
-
-f_RFETCH endp
-
-; ------------------------------------------------------------------------
-f_RTOD proc
-
-	m_pop	eax
-	ret
-
-f_RTOD endp
-
-; ------------------------------------------------------------------------
-f_ONEPLUS proc
-
-	m_getTOS	eax
-	inc			eax
+	m_getTOS	ecx
+	m_cFetch	al, ecx
+	and			eax, 000000ffh
 	m_setTOS	eax
 	ret
 
-f_ONEPLUS endp
+; ------------------------------------------------------------------------
+f_CSTORE:
+
+		m_pop		ecx
+		m_pop		eax
+		m_cStore	ecx, al
+		ret
 
 ; ------------------------------------------------------------------------
-f_PICK proc
+f_ADD:
 
-	m_pop	eax
-	ret
-
-f_PICK endp
-
-; ------------------------------------------------------------------------
-f_DEPTH proc
-
-	m_pop	eax
-	ret
-
-f_DEPTH endp
+		m_pop		edx
+		m_getTOS	eax
+		add			eax, edx
+		m_setTOS	eax
+		ret
 
 ; ------------------------------------------------------------------------
-f_GETCH proc
+f_SUB:
 
-	m_pop	eax
-	ret
-
-f_GETCH endp
-
-; ------------------------------------------------------------------------
-f_LSHIFT proc
-
-	m_pop	eax
-	ret
-
-f_LSHIFT endp
+		m_pop		edx
+		m_getTOS	eax
+		sub			eax, edx
+		m_setTOS	eax
+		ret
 
 ; ------------------------------------------------------------------------
-f_RSHIFT proc
+f_MUL:
 
-	m_pop	eax
-	ret
-
-f_RSHIFT endp
-
-; ------------------------------------------------------------------------
-f_AND proc
-
-	m_pop	eax
-	ret
-
-f_AND endp
+		m_pop		ecx
+		m_getTOS	eax
+		imul		eax, ecx
+		m_setTOS	eax
+		ret
 
 ; ------------------------------------------------------------------------
-f_OR proc
+f_DIV:
 
-	m_pop	eax
-	ret
-
-f_OR endp
-
-; ------------------------------------------------------------------------
-f_BRANCH proc
-
-	m_pop	eax
-	ret
-
-f_BRANCH endp
+		m_pop		ecx
+		m_getTOS	eax
+		; cmp			ecx, 0
+		; je			divByZero
+		idiv		ecx
+		m_setTOS	eax
+		ret
 
 ; ------------------------------------------------------------------------
-f_BRANCHZ proc
+f_LT:
 
-	m_pop	eax
-	ret
+		xor			edx, edx
+		m_pop		ecx
+		m_getTOS	eax
+		.IF (eax < ecx)
+			dec			edx
+		.ENDIF
+		m_setTOS	edx
 
-f_BRANCHZ endp
-
-; ------------------------------------------------------------------------
-f_BRANCHNZ proc
-
-	m_pop	eax
-	ret
-
-f_BRANCHNZ endp
+		ret
 
 ; ------------------------------------------------------------------------
-f_COMPAREI proc
+f_EQ:
 
-	m_pop	eax
-	ret
-
-f_COMPAREI endp
-
-; ------------------------------------------------------------------------
-f_BREAK proc
-
-	m_pop	eax
-	ret
-
-f_BREAK endp
+		xor			edx, edx
+		m_pop		ecx
+		m_getTOS	eax
+		.IF (eax == ecx)
+			dec			edx
+		.ENDIF
+		m_setTOS	edx
+		ret
 
 ; ------------------------------------------------------------------------
-f_RESET proc
+f_GT:
 
-	m_pop	eax
-	ret
-
-f_RESET endp
+		xor			edx, edx
+		m_pop		ecx
+		m_getTOS	eax
+		.IF (eax > ecx)
+			dec			edx
+		.ENDIF
+		m_setTOS	edx
+		ret
 
 ; ------------------------------------------------------------------------
-f_BYE proc
+f_DICTP:
 
-	m_pop	eax
+		LODSD
+		ret
+
+; ------------------------------------------------------------------------
+f_EMIT:
+
+		; TODO
+		ret
+
+; ------------------------------------------------------------------------
+f_OVER:
+
+		; TODO
+		ret
+
+; ------------------------------------------------------------------------
+f_COMPARE:
+
+		; TODO
+		ret
+
+; ------------------------------------------------------------------------
+f_FOPEN:
+
+		; TODO
+		ret
+
+; ------------------------------------------------------------------------
+f_FREAD:
+
+		; TODO
+		ret
+
+; ------------------------------------------------------------------------
+f_FREADLINE:
+
+		; TODO
+		ret
+
+; ------------------------------------------------------------------------
+f_FWRITE:
+
+		; TODO
+		ret
+
+; ------------------------------------------------------------------------
+f_FCLOSE:
+
+		; TODO
+		ret
+
+; ------------------------------------------------------------------------
+f_DTOR:
+
+	m_pop		edx
+	call		rPush
 	ret
 
-f_BYE endp
+; ------------------------------------------------------------------------
+f_RFETCH:
 
+	call		rPop
+	call		rPush
+	m_push		edx
+	ret
+
+; ------------------------------------------------------------------------
+f_RTOD:
+
+	call		rPop
+	m_push		edx
+	ret
+
+; ------------------------------------------------------------------------
+f_ONEPLUS:
+
+		inc DWORD PTR [ebp]
+		; m_getTOS	eax
+		; inc			eax
+		; m_setTOS	eax
+		ret
+
+; ------------------------------------------------------------------------
+f_PICK:
+
+		; TODO
+		ret
+
+; ------------------------------------------------------------------------
+f_DEPTH:
+
+		; TODO
+		ret
+
+; ------------------------------------------------------------------------
+f_GETCH:
+
+		; TODO
+		ret
+
+; ------------------------------------------------------------------------
+f_LSHIFT:
+
+		m_pop		ecx
+		m_getTOS	eax
+		shl			eax, cl
+		m_setTOS	edx
+		ret
+
+; ------------------------------------------------------------------------
+f_RSHIFT:
+
+		m_pop		ecx
+		m_getTOS	eax
+		shr			eax, cl
+		m_setTOS	edx
+		ret
+
+; ------------------------------------------------------------------------
+f_AND:
+
+		m_pop		ecx
+		m_getTOS	eax
+		and			eax, ecx
+		m_setTOS	edx
+		ret
+
+; ------------------------------------------------------------------------
+f_OR:
+
+		m_pop		ecx
+		m_getTOS	eax
+		or			eax, ecx
+		m_setTOS	edx
+		ret
+
+; ------------------------------------------------------------------------
+f_BRANCH:
+
+		; TODO
+		ret
+
+; ------------------------------------------------------------------------
+f_BRANCHZ:
+
+		; TODO
+		ret
+
+; ------------------------------------------------------------------------
+f_BRANCHNZ:
+
+		; TODO
+		ret
+
+; ------------------------------------------------------------------------
+f_COMPAREI:
+
+		; TODO
+		ret
+
+; ------------------------------------------------------------------------
+f_BREAK:
+
+		; TODO
+		ret
+
+; ------------------------------------------------------------------------
+f_RESET:
+
+		cld
+		mov		esi, theMemory
+		ret
+
+; ------------------------------------------------------------------------
+f_BYE:
+
+		; TODO
+		ret
 
 ; ---------------------------------------------------------------------------------------------------------
 ; ---------------------------------------------------------------------------------------------------------
@@ -731,26 +776,47 @@ f_BYE endp
 ; ---------------------------------------------------------------------------------------------------------
 ; ---------------------------------------------------------------------------------------------------------
 ; ---------------------------------------------------------------------------------------------------------
-isWS proc				; Sets the Z/Equals flag if the char in DL is whitespace
 
-			cmp			dl, 9
-			je			allDone
-			cmp			dl, 10
-			je			allDone
-			cmp			dl, 13
-			je			allDone
-			cmp			dl, 32
-			je			allDone
-			; Section 3.4.1.1 says non-printable chars can be considered whitespace
-			jg			notWS
-			cmp			dl, dl		
+; ---------------------------------------------------------------------------------------------------------
+; Sets the CARRY flag and AL=the number
 
-allDone:	ret
+isBase10Ch: 
 
-notWS:		cmp			dl, 32		; set the flags for "not equal"
-			ret
+		cmp			al, '0'
+		jl			ncNo
+		cmp			al, '9'
+		jg			ncNo
+		sub			al, '0'
 
-isWS endp
+ncYes:	stc
+		ret
+ncNo:	clc
+		ret
+
+; ---------------------------------------------------------------------------------------------------------
+; Sets the CARRY flag and AL=the number
+
+isBase16Ch:
+		call		isBase10Ch
+		jc			ncYes
+		cmp			al, 'F'
+		jle			b16U
+		sub			al, 32
+b16U:	cmp			al, 'A'
+		jl			ncNo
+		cmp			al, 'F'
+		jg			ncNo
+		sub			al, 'A'
+		jmp			ncYes
+
+; ---------------------------------------------------------------------------------------------------------
+; Sets the CARRY flag if the char in DL is whitespace
+
+isWS:
+
+			cmp			dl, ' '
+			jle			ncYes
+			jmp			ncNo
 
 ; -----------------------------------------------------------------------------------
 ; Case sensitive counted string compare - string 1 in [EDI], string 2 in [ESI]
@@ -779,17 +845,15 @@ notEqual:
 strCmpC endp
 
 ; ---------------------------------------------------------------------------------------------------------
-tolower proc PUBLIC
+tolower:
 	
 			cmp		dl, 'A'
-			jl		allDone
+			jl		tlExit
 			cmp		dl, 'Z'
-			jg		allDone
+			jg		tlExit
 			add		dl, 32
 
-allDone:	ret
-
-tolower endp
+tlExit:	ret
 
 ; ---------------------------------------------------------------------------------------------------------
 ; ** TESTED **
@@ -849,34 +913,27 @@ strCpyC endp
 ; ---------------------------------------------------------------------------------------------------------
 PutVector	macro nOpcode, pProc
 
-	mov  esi, nOpcode
-	mov  edx, offset pProc
-	mov  [edi][esi*4], edx
+	mov [edi][nOpCode*4], offset pProc
 
 	endm
 
 ; ---------------------------------------------------------------------------------------------------------
-unkOpcode proc
+unkOpcode:
 
-	mov		edx, offset msgBadOP
-	jmp		doError
-
-unkOpcode endp
+	jmp f_RESET
 
 ; ---------------------------------------------------------------------------------------------------------
-bsVectors	proc
+bsVectors:
 
 	mov  edi, offset primVectors
 
 	; Initialize all vectors to "unknown opcode"
 	mov		ecx, 255
-	mov		edx, offset unkOpcode
-	mov		[edi], edx
-L1:
-	mov		[edi][ecx*4], edx
-	loop	L1
+	mov		eax, offset unkOpcode
+	rep		stosd
 
 	; Fill in known opcodes
+	mov  edi, offset primVectors
 	PutVector I_LITERAL, f_LITERAL
 	PutVector I_FETCH, f_FETCH
 	PutVector I_STORE, f_STORE
@@ -930,8 +987,6 @@ L1:
 
 	ret
 
-bsVectors	endp
-
 ; ---------------------------------------------------------------------------------------------------------
 ; ** NOT TESTED **
 bootStrap proc
@@ -971,7 +1026,7 @@ bootStrap proc
 	; End of the little test
 
 	; Allocate the stack
-	invoke			VirtualAlloc, 0, dStackSize, MEM_COMMIT or MEM_RESERVE, PAGE_EXECUTE_READWRITE
+	invoke			VirtualAlloc, 0, stackSize, MEM_COMMIT or MEM_RESERVE, PAGE_EXECUTE_READWRITE
 
 	.IF eax == 0
 		mov			edx, offset msgNoMem
@@ -979,14 +1034,39 @@ bootStrap proc
 		INVOKE	ReadConsole, hStdIn, edx, 10, ADDR bytesRead, 0
 		invoke ExitProcess,0
 	.ENDIF
-	mov				dStack_MIN, eax
-	add				eax, dStackSize
-	mov				ebp, eax
-	sub				eax, SIZE_DWORD
-	mov				dStack_MAX, eax
+	mov				theStacks, eax
 
 	; Initialize the stacks
-	mov				var_rStack, offset var_rStack
+	mov				dStack_MIN, eax
+	add				eax, dStackSize
+	mov				var_rStack, eax
+
+	; leave a buffer of 4 CELLS around each stack
+	mov				eax, dStack_MIN
+	add				eax, 4*CELL_SIZE
+	mov				dStack_MIN, eax
+
+	mov				eax, var_rStack
+	sub				eax, 4*CELL_SIZE
+	mov				dStack_MAX, eax
+	mov				ebp, eax
+
+	mov				eax, var_rStack
+	add				eax, 4*CELL_SIZE
+	mov				var_rStack, eax
+
+	; 
+	mov				edi, theMemory
+	m_instr I_CLITERAL
+	m_instr 1
+	m_instr I_CLITERAL
+	m_instr 2
+	m_instr I_ADD
+	m_instr I_JMPNZ
+	m_instr 0
+	m_instr 0
+	m_instr 0
+	m_instr 0
 
 	ret
 
@@ -999,50 +1079,27 @@ bootStrap endp
 ; ---------------------------------------------------------------------------------------------------------
 ; ---------------------------------------------------------------------------------------------------------
 ; ---------------------------------------------------------------------------------------------------------
-; This is used to execute one VM instruction.
-
-executeOpcode proc						; EDX = opcode, ESI = IP
-
-	and		eax, 00ffh					; ensure range 0-255 ... all 256 entries have handlers.
-	shl		eax, 2
-	mov		ecx, primVectors[eax]		; most cause a jump to the invalid opcode handler.
-	jmp		ecx							; jump to the handler.
-
-executeOpcode endp
-
-
-; ---------------------------------------------------------------------------------------------------------
 ; This is the main execution loop for the interpreter.
 
-; ESI = IP
-runForthVM proc	
+runCPULoop proc			; ESI = IP
 	
-L1:
+cpuLoop:
 	; NOTE: the direction flag is ASSUMED to be clear.
 	; Anything that sets it MUST clear it before exiting.
 	lodsb
-	cmp				al, I_RET
-	je				doRet
+	cmp			al, I_BYE
+	je			cpuDone
 
-	cmp				al, I_BYE
-	je				allDone
+	and			eax, 00ffh					; ensure range 0-255 ... all 256 entries have handlers.
+	shl			eax, 2
+	mov			ecx, primVectors[eax]		; most cause a jump to the invalid opcode handler.
+	call		ecx							; jump to the handler.
+	jmp			cpuLoop
 
-	call			executeOpcode
-	jmp				L1
-
-doRet:
-	mov		edx, var_rStack			; If the return stack is empty, then we are done
-	cmp		edx, offset var_rStack
-	jle		allDone
-
-	call rPop
-	mov  esi, edx
-	jmp  L1
-
-allDone:
+cpuDone:
 	ret
 
-runForthVM endp
+runCPULoop endp
 
 ; ---------------------------------------------------------------------------------------------------------
 ; ---------------------------------------------------------------------------------------------------------
@@ -1054,8 +1111,10 @@ runForthVM endp
 main		proc
 
 	mov			initialESPVal, esp
-	call		bootStrap 
-	jmp			runForthVM
+	call		bootStrap
+	cld
+	mov			esi, theMemory
+	jmp			runCPULoop
 
 main	endp
 end main
